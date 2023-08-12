@@ -1,8 +1,8 @@
-﻿using BattleBitAPI;
+using BattleBitAPI;
 using BattleBitAPI.Common;
 using BattleBitAPI.Server;
-using System.Threading.Channels;
-using System.Xml;
+using System.ComponentModel;
+using System.Numerics;
 
 class Program
 {
@@ -16,98 +16,99 @@ class Program
 }
 class MyPlayer : Player<MyPlayer>
 {
-    public bool IsZombie;
+    public int TotalKills;
+    public List<MyPlayer> players;
 }
 class MyGameServer : GameServer<MyPlayer>
 {
+    private List<MyPlayer> players;
 
     public override async Task OnRoundStarted()
     {
+        await Console.Out.WriteLineAsync("Round Started"); 
+
+        AnnounceShort("Kill enemies and steal their kill scores! GOOD LUCK!");
+
+        // Get all players
+        players = AllPlayers.ToList();
+
+        // Reset all player kill counts
+        foreach (var p in players)
+        {
+            p.TotalKills = 0;
+        }
+
     }
+
     public override async Task OnRoundEnded()
     {
+        await Console.Out.WriteLineAsync("Round Ended");
+
+        // Displaying the player with the most kills
+        var topkillplayer = players.OrderByDescending(p => p.TotalKills).FirstOrDefault();
+        AnnounceLong($"KillScore Top Player {topkillplayer.Name} / {topkillplayer.TotalKills} Kills");
     }
 
     public override async Task OnPlayerConnected(MyPlayer player)
     {
-        bool anyZombiePlayer = false;
-        foreach (var item in AllPlayers)
-        {
-            if (item.IsZombie)
-            {
-                anyZombiePlayer = true;
-                break;
-            }
-        }
-
-        if (!anyZombiePlayer)
-        {
-            player.IsZombie = true;
-            player.Message("You are the zombie.");
-            player.Kill();
-        }
+        SayToChat($"JOIN Player: {player.Name}, Welcome!");
     }
 
     public override async Task OnAPlayerKilledAnotherPlayer(OnPlayerKillArguments<MyPlayer> args)
     {
-        if (args.Victim.IsZombie)
+        if (args.Victim.Team != args.Killer.Team)
         {
-            args.Victim.IsZombie = false;
-            args.Victim.Message("You are no longer zombie");
+            // Add 1 kill point
+            args.Killer.TotalKills += 1;
 
-            AnnounceShort("Choosing new zombie in 5");
-            await Task.Delay(1000);
-            AnnounceShort("Choosing new zombie in 4");
-            await Task.Delay(1000);
-            AnnounceShort("Choosing new zombie in 3");
-            await Task.Delay(1000);
-            AnnounceShort("Choosing new zombie in 2");
-            await Task.Delay(1000);
-            AnnounceShort("Choosing new zombie in 1");
-            await Task.Delay(1000);
+            // Steal all kill points from the victim
+            args.Killer.TotalKills += args.Victim.TotalKills;
+            args.Killer.Message("You got all the victim's kill points!");
 
-            args.Killer.IsZombie = true;
-            args.Killer.SetHeavyGadget(Gadgets.SledgeHammer.ToString(), 0, true);
+            // Victim loses all kill points
+            args.Victim.TotalKills = 0;
+            args.Victim.Message("You lost all your kill points!");
 
-            var position = args.Killer.GetPosition();
+            // Killstreak processing and its message processing
+            if (args.Killer.TotalKills > 3)
+            {
+                string killer_mes = $"{args.Killer.TotalKills} Killstreak! Nice! [Kill Weapon: {args.KillerTool}]";
+                string announce_mes = $"{args.Killer.Name}: {args.Killer.TotalKills} Killstreak! [Kill Weapon: {args.KillerTool}]";
+
+                switch (args.Killer.TotalKills)
+                {
+                    case 3:
+                        args.Killer.Message(killer_mes);
+                        SayToChat(announce_mes);
+                        return;
+                    case 5:
+                        args.Killer.Message(killer_mes);
+                        SayToChat(announce_mes);
+                        return;
+                    case 10:
+                        args.Killer.Message(killer_mes);
+                        SayToChat(announce_mes);
+                        return;
+                    case 20:
+                        args.Killer.Message(killer_mes);
+                        SayToChat(announce_mes);
+                        return;
+                }
+                var topkillplayer = players.OrderByDescending(p => p.TotalKills).FirstOrDefault();
+                AnnounceShort($"Current Top Player {topkillplayer.Name} / {topkillplayer.TotalKills} Kills");
+            }
+
         }
+
     }
-
-
-    public override async Task<OnPlayerSpawnArguments> OnPlayerSpawning(MyPlayer player, OnPlayerSpawnArguments request)
-    {
-        if (player.IsZombie)
-        {
-            request.Loadout.PrimaryWeapon = default;
-            request.Loadout.SecondaryWeapon = default;
-            request.Loadout.LightGadget = null;
-            request.Loadout.HeavyGadget = Gadgets.SledgeHammer;
-            request.Loadout.Throwable = null;
-        }
-
-        return request;
-    }
-    public override async Task OnPlayerSpawned(MyPlayer player)
-    {
-        if(player.IsZombie)
-        {
-            player.SetRunningSpeedMultiplier(2f);
-            player.SetJumpMultiplier(2f);
-            player.SetFallDamageMultiplier(0f);
-            player.SetReceiveDamageMultiplier(0.1f);
-            player.SetGiveDamageMultiplier(4f);
-        }
-    }
-
-
 
     public override async Task OnConnected()
     {
-        await Console.Out.WriteLineAsync("Current state: " + RoundSettings.State);
-
+        await Console.Out.WriteLineAsync("Server: " + RoundSettings.State);
     }
+
     public override async Task OnGameStateChanged(GameState oldState, GameState newState)
     {
-        await Console.Out.WriteLineAsync("State changed to -> " + newState);
+        await Console.Out.WriteLineAsync("Server: " + newState);
     }
 }
