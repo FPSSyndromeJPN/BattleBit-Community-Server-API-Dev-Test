@@ -1,8 +1,6 @@
 using BattleBitAPI;
 using BattleBitAPI.Common;
 using BattleBitAPI.Server;
-using System.ComponentModel;
-using System.Numerics;
 
 class Program
 {
@@ -94,8 +92,11 @@ class MyGameServer : GameServer<MyPlayer>
                         SayToChat(announce_mes);
                         return;
                 }
+
+                // Killtop Player Update
                 var topkillplayer = players.OrderByDescending(p => p.TotalKills).FirstOrDefault();
                 AnnounceShort($"Current Top Player {topkillplayer.Name} / {topkillplayer.TotalKills} Kills");
+                
             }
 
         }
